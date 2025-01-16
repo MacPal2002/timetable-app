@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">timetable</string>
+    <string name="app_name">Dzienniczek</string>
     <string name="messages">Wiadomości</string>
     <string name="schedule">Plan Zajęć</string>
     <string name="no_messages">Brak wiadomości</string>

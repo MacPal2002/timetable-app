@@ -1,4 +1,4 @@
-package com.example.timetable.screen.components
+package com.example.timetable.components
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background

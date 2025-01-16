@@ -2,9 +2,7 @@ package com.example.timetable.utils
 
 import android.content.Context
 import androidx.preference.PreferenceManager
-import com.example.timetable.model.ApiResponse
 import com.google.gson.Gson
-import retrofit2.Response
 
 // Zapisz token użytkownika
 fun saveToken(context: Context, token: String) {
@@ -36,12 +34,3 @@ fun getLastScreenState(context: Context): String? {
     val sharedPreferences = context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
     return sharedPreferences.getString("last_screen", "schedule") // Domyślny ekran to "schedule"
 }
-
-// Funkcja do zdeserializowania błędu
-fun parseErrorResponse(errorBody: String): ErrorResponse {
-    // Zdeserializowanie błędu do modelu ErrorResponse
-    return Gson().fromJson(errorBody, ErrorResponse::class.java)
-}
-
-// Model odpowiedzi błędu
-data class ErrorResponse(val message: String?)
