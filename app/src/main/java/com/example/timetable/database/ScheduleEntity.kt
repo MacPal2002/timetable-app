@@ -1,7 +1,11 @@
-package com.example.timetable.model
+package com.example.timetable.database
 
-data class Schedule(
-    val id: String,
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "schedules")
+data class ScheduleEntity(
+    @PrimaryKey val id: String,
     val day: String,
     val startTime: String,
     val endTime: String,
@@ -10,6 +14,4 @@ data class Schedule(
     val teacher: String,
     val course: String,
     val group: String,
-
-
 )

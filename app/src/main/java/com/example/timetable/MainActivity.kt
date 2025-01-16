@@ -9,6 +9,8 @@ import androidx.annotation.RequiresApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
+import com.example.timetable.database.TimetableDatabase
 import com.example.timetable.ui.theme.TimetableTheme
 import com.example.timetable.screen.MainScreen
 import com.example.timetable.screen.LoginScreen
@@ -34,6 +36,12 @@ class MainActivity : ComponentActivity() {
 fun App() {
     val context = LocalContext.current
     val navController = rememberNavController()  // Inicjalizacja NavController
+    // Tworzenie instancji Room Database
+    val database = Room.databaseBuilder(
+        context, // Użycie kontekstu aplikacji
+        TimetableDatabase::class.java,
+        "timetable_database"
+    ).build()
 
     // Odczytanie tokenu z SharedPreferences
     var token by remember { mutableStateOf(getToken(context)) }
@@ -46,11 +54,15 @@ fun App() {
         })
     } else {
         // Jeśli token istnieje, przejdź do głównego ekranu
-        MainScreen(navController = navController, token = token!!, onLogout = {
-            // Usuń token przy wylogowaniu
-            clearToken(context)
-            token = null
-        })
+        MainScreen(
+            navController = navController, token = token!!, onLogout = {
+                // Usuń token przy wylogowaniu
+                clearToken(context)
+                token = null
+            },
+            database = database,
+            context = context
+        )
     }
 }
 

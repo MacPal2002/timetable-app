@@ -8,5 +8,5 @@ data class Message(
     val body: String,
     val date: String,
     val time: String,
-    val readed: Boolean
+    val read: Boolean
 )
