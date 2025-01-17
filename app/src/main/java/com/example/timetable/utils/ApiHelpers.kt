@@ -8,33 +8,70 @@ import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
 import java.util.concurrent.TimeoutException
+import com.example.timetable.BuildConfig
+
 
 suspend fun <T> fetchData(
     apiCall: suspend () -> Response<ApiResponse<T>>,
     onSuccess: (T) -> Unit,
-    onError: (String) -> Unit
+    onError: (String) -> Unit,
+    onUnauthorized: () -> Unit,
+    debug: Boolean = BuildConfig.DEBUG
 ) {
     try {
         val response = apiCall()
         if (response.isSuccessful) {
             response.body()?.let { apiResponse ->
                 if (!apiResponse.error && apiResponse.data != null) {
-                    onSuccess(apiResponse.data) // Przekazujemy dane do `onSuccess`
+                    onSuccess(apiResponse.data)
                 } else {
-                    onError(apiResponse.message ?: "Unknown error from server") // Obsługa błędów z API
+                    onError(apiResponse.message ?: "Unknown error from server")
                 }
             } ?: run {
-                onError("Empty response from server") // Obsługa pustego ciała odpowiedzi
+                onError("Empty response from server")
             }
         } else {
-            onError("HTTP ${response.code()}: ${response.message()}") // Obsługa błędów HTTP
+            when (response.code()) {
+                401 -> onUnauthorized()
+                else -> {
+                    val errorBody = response.errorBody()?.string()
+                    val errorMessage = if (debug) {
+                        "HTTP ${response.code()}: ${errorBody ?: response.message()}"
+                    } else {
+                        "An error occurred. Please try again."
+                    }
+                    onError(errorMessage)
+                }
+            }
         }
     } catch (e: IOException) {
-        onError("No internet connection")
+        val errorMessage = if (debug) {
+            "Network error: ${e.message}"
+        } else {
+            "No internet connection"
+        }
+        onError(errorMessage)
+    } catch (e: HttpException) {
+        val errorMessage = if (debug) {
+            "HTTP exception: ${e.code()} - ${e.message()}"
+        } else {
+            "An error occurred. Please try again."
+        }
+        onError(errorMessage)
     } catch (e: Exception) {
-        onError("An unexpected error occurred: ${e.message}")
+        val errorMessage = if (debug) {
+            "Unexpected error: ${e.message}"
+        } else {
+            "An unexpected error occurred."
+        }
+        onError(errorMessage)
     }
 }
+
+
+
+
+
 
 
 suspend fun handleLogin(username: String, password: String): Result<ApiResponse<Any>> {

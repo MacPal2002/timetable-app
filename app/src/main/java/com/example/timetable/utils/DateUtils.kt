@@ -11,21 +11,13 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @SuppressLint("NewApi")
-fun generateDaysInRange(startDate: LocalDate, monthsToAdd: Long): List<LocalDate> {
-    // Obliczanie daty końcowej
-    val endDate = startDate.plusMonths(monthsToAdd)
-
-    val daysList = mutableListOf<LocalDate>()
-    var currentDay = startDate
-
-    // Generowanie dni od startDate do endDate
-    while (!currentDay.isAfter(endDate)) {
-        daysList.add(currentDay)
-        currentDay = currentDay.plusDays(1)
-    }
-
-    return daysList
+fun generateDaysInRange(startDate: LocalDate, monthsCount: Int): List<LocalDate> {
+    val endDate = startDate.plusMonths(monthsCount.toLong())
+    val daysBetween = startDate.datesUntil(endDate).toList() // Generuje wszystkie daty w zakresie
+    return daysBetween
 }
+
+
 
 @RequiresApi(Build.VERSION_CODES.O)
 fun isLessonNow(schedule: Schedule, currentTime: LocalTime, currentDate: LocalDate): Boolean {

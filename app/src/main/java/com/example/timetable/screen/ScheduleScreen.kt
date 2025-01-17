@@ -10,13 +10,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.timetable.components.LoadingIndicator
 import com.example.timetable.components.StateMessage
 import com.example.timetable.components.SubjectCard
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import com.example.timetable.MainActivity
 import com.example.timetable.components.ErrorSnackbar
 import com.example.timetable.database.TimetableDatabase
 import com.example.timetable.model.Schedule
@@ -24,7 +25,6 @@ import com.example.timetable.network.ApiClient
 import com.example.timetable.utils.fetchData
 import com.example.timetable.utils.generateDaysInRange
 import com.example.timetable.utils.isLessonNow
-import com.example.timetable.utils.parseDateTime
 import com.example.timetable.utils.toEntity
 import com.example.timetable.utils.toModel
 import kotlinx.coroutines.launch
@@ -36,9 +36,17 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleScreen(token: String, database: TimetableDatabase) {
+    val today = LocalDate.now()
     var selectedDay by remember { mutableStateOf(LocalDate.now()) }
-    val displayedDays = generateDaysInRange(LocalDate.now(), 30) // Wyświetlenie 30 dni
+    val displayedDays = generateDaysInRange(today, 3) // Wyświetlenie dni z 3 miesięcy
+    val coroutineScope = rememberCoroutineScope()
 
+    // Usuń przestarzałe dane z bazy przed synchronizacją
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            database.timetableDao().deleteOldSchedules(today.toString()) // Usuwanie starych dni
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -77,17 +85,20 @@ fun ScheduleList(
     var isRefreshing by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showError by remember { mutableStateOf(false) }
-    val lastSyncTimestamps = remember { mutableStateMapOf<LocalDate, Long>() } // Mapa ostatnich synchronizacji
+    val lastSyncTimestamps = remember { mutableStateMapOf<LocalDate, Long>() }
     val coroutineScope = rememberCoroutineScope()
 
+    // Uzyskaj Context z @Composable i przekaż do fetchData
+    val context = LocalContext.current
+
     // Funkcja do odświeżania harmonogramu
-    fun refreshSchedules() {
+    fun refreshSchedules(force: Boolean = false) {
         val currentTime = System.currentTimeMillis()
         val lastSyncTime = lastSyncTimestamps[selectedDay]
 
-        // Sprawdzanie, czy synchronizacja była wykonana niedawno
-        if (lastSyncTime != null && (currentTime - lastSyncTime) < 30_000) {
-            return // Jeśli dane były synchronizowane niedawno, zakończ funkcję
+        // Zapobiegaj częstemu odświeżaniu (jeśli synchronizacja była niedawno)
+        if (!force && lastSyncTime != null && (currentTime - lastSyncTime) < 30_000) {
+            return
         }
 
         coroutineScope.launch {
@@ -95,26 +106,37 @@ fun ScheduleList(
             try {
                 fetchData(
                     apiCall = {
-                        ApiClient.service.getSchedulesForDay("Bearer $token", selectedDay.toString())
+                        ApiClient.service.getSchedulesForDay(
+                            "Bearer $token",
+                            selectedDay.toString()
+                        )
                     },
                     onSuccess = { apiResponse ->
                         coroutineScope.launch {
                             val entities = apiResponse.map { it.toEntity() }
-                            database.timetableDao().insertSchedules(entities) // Zapis do bazy
 
+                            // Synchronizuj dane: usuń lokalne elementy, które nie istnieją w API
+                            database.timetableDao().deleteSchedulesForDay(selectedDay.toString())
+
+                            // Zapisz nowe dane z API
+                            database.timetableDao().insertSchedules(entities)
+
+                            // Ustaw harmonogram na dane pobrane z API
                             schedules = apiResponse.sortedBy {
                                 LocalTime.parse(it.startTime, DateTimeFormatter.ofPattern("HH:mm"))
                             }
+
                             errorMessage = null
                             showError = false
-
-                            // Aktualizacja znacznika czasu dla wybranego dnia
                             lastSyncTimestamps[selectedDay] = System.currentTimeMillis()
                         }
                     },
                     onError = { error ->
                         errorMessage = error
                         showError = true
+                    },
+                    onUnauthorized = {
+                        (context as? MainActivity)?.handleUnauthorized()
                     }
                 )
             } finally {
@@ -123,18 +145,17 @@ fun ScheduleList(
         }
     }
 
-    // Pobranie danych z bazy przy pierwszym renderowaniu i zmianie dnia
     LaunchedEffect(selectedDay) {
         schedules = database.timetableDao()
             .getSchedulesForDay(selectedDay.toString())
             .map { it.toModel() }
-        refreshSchedules() // Odśwież dane z API
+
+        refreshSchedules()
     }
 
-    // UI - bez zmian
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
-        onRefresh = { refreshSchedules() }
+        onRefresh = { refreshSchedules(force = true) }
     )
 
     Box(
@@ -143,6 +164,9 @@ fun ScheduleList(
             .pullRefresh(pullRefreshState)
     ) {
         when {
+            schedules.isEmpty() && errorMessage != null -> {
+                StateMessage(message = "Brak danych")
+            }
             schedules.isEmpty() -> {
                 StateMessage(message = "Brak zajęć na wybrany dzień")
             }
@@ -161,7 +185,6 @@ fun ScheduleList(
             }
         }
 
-        // Wyświetlenie dymka błędu
         ErrorSnackbar(
             errorMessage = errorMessage,
             isVisible = showError,

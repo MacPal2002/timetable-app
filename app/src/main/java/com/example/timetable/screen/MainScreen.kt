@@ -9,13 +9,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.timetable.components.BottomNavigationBar
+import com.example.timetable.components.LogoutButton
 import com.example.timetable.database.TimetableDatabase
 import com.example.timetable.utils.getLastScreenState
 import com.example.timetable.utils.logout
@@ -29,10 +28,10 @@ fun MainScreen(
     token: String,
     onLogout: () -> Unit,
     database: TimetableDatabase,
-    context: Context // Added context parameter to retrieve SharedPreferences
+    context: Context
 ) {
-    val lastScreen = getLastScreenState(context) // Retrieve the last visited screen
-    val startDestination = lastScreen ?: "schedule" // Fallback to "schedule" if null
+    val lastScreen = getLastScreenState(context)
+    val startDestination = lastScreen ?: "schedule"
 
     Scaffold(
         bottomBar = {
@@ -42,14 +41,20 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             NavHost(
                 navController = navController,
-                startDestination = startDestination // Set the retrieved last screen
+                startDestination = startDestination
             ) {
                 composable("schedule") {
-                    ScheduleScreen(token = token, database = database)
+                    ScheduleScreen(
+                        token = token,
+                        database = database
+                    )
                     saveScreenState(context, "schedule")
                 }
                 composable("messages") {
-                    MessagesScreen(token = token, database = database)
+                    MessagesScreen(
+                        token = token,
+                        database = database
+                    )
                     saveScreenState(context, "messages")
                 }
                 composable("message_details/{messageId}") { backStackEntry ->
@@ -62,21 +67,13 @@ fun MainScreen(
                 }
             }
 
-            // Logout button
+            // Przycisk wylogowania jako komponent
             val coroutineScope = rememberCoroutineScope()
-
-            Button(
-                onClick = {
-                    coroutineScope.launch {
-                        logout(token, onLogout)
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 32.dp, start = 16.dp, end = 16.dp)
-            ) {
-                Text(text = "Logout")
-            }
+            LogoutButton(onLogout = {
+                coroutineScope.launch {
+                    logout(token, onLogout)
+                }
+            })
         }
     }
 }

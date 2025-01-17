@@ -19,8 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.timetable.MainActivity
 import com.example.timetable.components.LoadingIndicator
 import com.example.timetable.components.StateMessage
 import com.example.timetable.model.Message
@@ -33,6 +35,9 @@ fun MessageDetailsScreen(token: String, messageId: String, onBack: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Uzyskaj Context z @Composable i przekaż do fetchData
+    val context = LocalContext.current
+
     LaunchedEffect(messageId) {
         fetchData(
             apiCall = { ApiClient.service.getMessage("Bearer $token", messageId) },
@@ -43,7 +48,11 @@ fun MessageDetailsScreen(token: String, messageId: String, onBack: () -> Unit) {
             onError = { error ->
                 errorMessage = error
                 isLoading = false
-            }
+            },
+            onUnauthorized = {
+                (context as? MainActivity)?.handleUnauthorized()
+            },
+//            context = context, // Przekazanie kontekstu
         )
     }
 

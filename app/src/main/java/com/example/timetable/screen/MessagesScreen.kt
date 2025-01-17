@@ -2,7 +2,6 @@ package com.example.timetable.screen
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,9 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.timetable.MainActivity
 import com.example.timetable.components.ErrorSnackbar
-import com.example.timetable.components.LoadingIndicator
 import com.example.timetable.components.MessageItem
 import com.example.timetable.components.StateMessage
 import com.example.timetable.database.TimetableDatabase
@@ -73,14 +73,17 @@ fun MessagesList(
     val lastSyncTimestamp = remember { mutableLongStateOf(0L) } // Przechowuje czas ostatniej synchronizacji
     val coroutineScope = rememberCoroutineScope()
 
+    // Uzyskaj Context z @Composable i przekaż do fetchData
+    val context = LocalContext.current
+
     // Funkcja do odświeżania wiadomości
-    fun refreshMessages() {
+    fun refreshMessages(force: Boolean = false) {
         val currentTime = System.currentTimeMillis()
         val lastSyncTime = lastSyncTimestamp.longValue
 
-        // Sprawdzanie, czy ostatnia synchronizacja była mniej niż 30 sekund temu
-        if ((currentTime - lastSyncTime) < 30_000) {
-            return // Nie synchronizuj, jeśli było za wcześnie
+        // Zapobiegaj zbyt częstemu odświeżaniu (jeśli synchronizacja była niedawno)
+        if (!force && (currentTime - lastSyncTime) < 30_000) {
+            return
         }
 
         coroutineScope.launch {
@@ -91,19 +94,30 @@ fun MessagesList(
                     onSuccess = { apiResponse ->
                         coroutineScope.launch {
                             val entities = apiResponse.map { it.toEntity() }
+
+                            // Usuń wiadomości, które już nie istnieją w danych API
+                            val apiMessageIds = entities.map { it.id }
+                            database.timetableDao().deleteMessagesNotIn(apiMessageIds)
+
+                            // Zapisz nowe wiadomości z API w bazie danych
                             database.timetableDao().insertMessages(entities)
 
+                            // Ustaw wiadomości do wyświetlenia w UI
                             messages = apiResponse.sortedByDescending { message ->
                                 parseDateTime(message.date, message.time)
                             }
+
                             errorMessage = null
                             showError = false
-                            lastSyncTimestamp.longValue = System.currentTimeMillis() // Aktualizuj znacznik czasu
+                            lastSyncTimestamp.longValue = System.currentTimeMillis()
                         }
                     },
                     onError = { error ->
                         errorMessage = error
                         showError = true
+                    },
+                    onUnauthorized = {
+                        (context as? MainActivity)?.handleUnauthorized()
                     }
                 )
             } finally {
@@ -111,6 +125,7 @@ fun MessagesList(
             }
         }
     }
+
 
     // Pierwsze pobranie wiadomości przy renderowaniu
     LaunchedEffect(Unit) {
@@ -122,7 +137,7 @@ fun MessagesList(
 
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
-        onRefresh = { refreshMessages() }
+        onRefresh = { refreshMessages(force = true) }
     )
 
     Box(
@@ -131,6 +146,9 @@ fun MessagesList(
             .pullRefresh(pullRefreshState)
     ) {
         when {
+            messages.isEmpty() && errorMessage != null -> {
+                StateMessage(message = "Brak danych")
+            }
             messages.isEmpty() -> {
                 StateMessage(message = "Brak wiadomości")
             }
